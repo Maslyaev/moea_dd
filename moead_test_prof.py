@@ -13,8 +13,36 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 
-seed = 2
+seed = 14
 np.random.seed(seed)
+
+class solution_array(moeadd_solution):
+    def __init__(self, x, obj_funs):
+        self.vals = x
+        self.obj_funs = obj_funs
+        self.x_size_sqrt = np.sqrt(self.vals.size)
+        self.precomputed_value = False
+        self.precomputed_domain = False
+    
+    @property
+    def obj_fun(self):
+        if self.precomputed_value: 
+            return self._obj_fun
+        else:
+            self._obj_fun = np.fromiter(map(lambda obj_fun: obj_fun(self.vals, self.x_size_sqrt), self.obj_funs), dtype = float)
+            self.precomputed_value = True
+            return self._obj_fun
+
+    def __eq__(self, other):
+        epsilon = 1e-9
+#        print('Checking the equality')
+        if isinstance(other, type(self)):
+            return np.all(np.abs(self.vals - other.vals) < epsilon)
+        else:
+            return NotImplemented
+    
+    def __hash__(self):
+        return hash(tuple(self.vals))
 
 
 class test_population_constructor(object):
@@ -22,7 +50,7 @@ class test_population_constructor(object):
         self.bs_len = bitstring_len; self.vals_range = vals_range
         
     def create(self, *args):
-        created_solution = solution_obj(x = np.random.uniform(low = self.vals_range[0], high = self.vals_range[1], size = self.bs_len), 
+        created_solution = solution_array(x = np.random.uniform(low = self.vals_range[0], high = self.vals_range[1], size = self.bs_len), 
                              obj_funs=[optimized_fun_1, optimized_fun_2])
         return created_solution        
 
@@ -34,13 +62,13 @@ class test_evolutionary_operator(object):
         
     def mutation(self, solution):
         output = deepcopy(solution)
-        output.x_vals = self._mut_lambda(output.x_vals) #output.x_vals + np.random.normal(scale = )
+        output.vals = self._mut_lambda(output.vals) #output.vals + np.random.normal(scale = )
         return output
 
     def crossover(self, parents_pool):
         offspring_pool = []
         for idx in np.arange(np.int(np.floor(len(parents_pool)/2.))):
-            print(parents_pool[2*idx].x_vals, parents_pool[2*idx+1].x_vals)
+#            print(parents_pool[2*idx].vals, parents_pool[2*idx+1].vals)
             offsprings = self._xover((parents_pool[2*idx], parents_pool[2*idx+1]))
             offspring_pool.extend(offsprings)
         return offspring_pool
@@ -96,8 +124,8 @@ def mixing_xover(parents):
     offsprings[0].precomputed_value = False; offsprings[1].precomputed_value = False
     offsprings[0].precomputed_domain = False; offsprings[1].precomputed_domain = False
     
-    offsprings[0].x_vals = parents[0].x_vals + proportion * (parents[1].x_vals - parents[0].x_vals)
-    offsprings[1].x_vals = parents[0].x_vals + (1 - proportion) * (parents[1].x_vals - parents[0].x_vals)
+    offsprings[0].vals = parents[0].vals + proportion * (parents[1].vals - parents[0].vals)
+    offsprings[1].vals = parents[0].vals + (1 - proportion) * (parents[1].vals - parents[0].vals)
     return offsprings
     
 operator = test_evolutionary_operator(mixing_xover, gaussian_mutation)
@@ -107,4 +135,4 @@ optimizer.pass_best_objectives(0, 0)
 def simple_selector(sorted_neighbors, number_of_neighbors = 4):
     return sorted_neighbors[:number_of_neighbors]
 
-optimizer.optimize(simple_selector, 0.95, (4,), 50, 0.75)
+optimizer.optimize(simple_selector, 0.95, (4,), 100, 0.75)
