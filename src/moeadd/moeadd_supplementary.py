@@ -26,7 +26,7 @@ def check_dominance(target, compared_with) -> bool:
  
 def NDL_update(new_solution, levels) -> list:   # efficient_NDL_update
     moving_set = {new_solution}
-    new_levels = levels#deepcopy(levels)
+    new_levels = deepcopy(levels) #levels#
     for level_idx in np.arange(len(levels)):
         moving_set_new = set()
         for ms_idx, moving_set_elem in enumerate(moving_set):

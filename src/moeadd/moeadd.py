@@ -12,10 +12,10 @@ from functools import reduce
 from src.moeadd.moeadd_supplementary import fast_non_dominated_sorting, slow_non_dominated_sorting, NDL_update, Equality, Inequality, acute_angle        
 
 def get_domain_idx(solution, weights) -> int:
-    if type(solution) == np.ndarray or type(solution) == np.ndarray:
-        return np.argmin(np.array(list(map(lambda x: acute_angle(x, solution), weights))))
+    if type(solution) == np.ndarray:
+        return np.fromiter(map(lambda x: acute_angle(x, solution), weights), dtype=float).argmin()
     elif type(solution.obj_fun) == np.ndarray:
-        return np.argmin(np.fromiter(map(lambda x: acute_angle(x, solution.obj_fun), weights), dtype = float))
+        return np.fromiter(map(lambda x: acute_angle(x, solution.obj_fun), weights), dtype=float).argmin()
     else:
         raise ValueError('Can not detect the vector of objective function for solution')
     
@@ -46,35 +46,31 @@ class pareto_levels(object):
         self.levels = self._sorting_method(self.population)
     
     def update(self, point):
-#        print('Update to add point', point.vals)
-#        print('Pareto levels update: before', [solution.vals for solution in  self.population])
-#        print('lengths:', len(self.population), sum([len(level) for level in self.levels]))        
-#        for level_idx, level in enumerate(self.levels):
-#            print(level_idx, [solution.vals for solution in level])
         self.levels = self._update_method(point, self.levels)
         self.population.append(point)
-#        print('\n')
-#        print('-||- after', [solution.vals for solution in  self.population])
-#        print('lengths:', len(self.population), sum([len(level) for level in self.levels]))
-#        for level_idx, level in enumerate(self.levels):
-#            print(level_idx, [solution.vals for solution in level])
-#        print('\n')
-#        print('\n')
-#    
+
     def delete_point(self, point):  # Разобраться с удалением.  Потенциально ошибка
 #        print('deleting', point.vals)
         new_levels = []
         for level in self.levels:
-            temp = level# deepcopy(level)
-            if point in temp: temp.remove(point)
-            if not len(temp) == 0: new_levels.append(temp)
+            #print('New level processing')
+            # temp = deepcopy(level)
+            temp = []
+            for element in level:
+                if element is not point:
+                    #print('found point')
+                    temp.append(element)
+            if not len(temp) == 0:
+                new_levels.append(temp) # Точка находится в нескольких уровнях
+
 #        print(point, point.vals, type(point), '\n')
 #        print('population vals:', [solution.vals for solution in self.population], '\n')
 #        print('population objects:', [solution for solution in self.population], '\n')        
         population_cleared = []
 
         for elem in self.population:
-            if not elem == point: population_cleared.append(elem)
+            if elem is not point:
+                population_cleared.append(elem)
         if len(population_cleared) != sum([len(level) for level in new_levels]):
             print('initial population', [solution.vals for solution in self.population],'\n')
             print('cleared population', [solution.vals for solution in population_cleared],'\n')
@@ -100,18 +96,14 @@ def locate_pareto_worst(levels, weights, best_obj, penalty_factor = 1.):
     domain_solution_NDL_idxs = np.empty(most_crowded_count)
     len_lvls = len(levels.levels)
     for solution_idx, solution in enumerate(domain_solutions[most_crowded_domain]):
-#        breaker = False
-        for level_idx in np.arange(len_lvls):
-            if any([solution == level_solution for level_solution in levels.levels[level_idx]]):
-#            for level_solution in levels.levels[level_idx]:
-#                if solution == level_solution:
-                    domain_solution_NDL_idxs[solution_idx] = level_idx
-                    break#er = True
-#            if breaker: break
-            if level_idx == len_lvls - 1:
-                raise StopIteration('Solution not located on pareto frontier')
-#        domain_solution_NDL_idxs[solution_idx] = [level_idx for level_idx in np.arange(len(levels.levels)) 
-#                                                    if any([solution == level_solution for level_solution in levels.levels[level_idx]])][0]
+#        for level_idx in np.arange(len_lvls):
+#            if any([solution == level_solution for level_solution in levels.levels[level_idx]]):
+#                    domain_solution_NDL_idxs[solution_idx] = level_idx
+#                    break
+#            if level_idx == len_lvls - 1:
+#                raise StopIteration('Solution not located on pareto frontier')
+        domain_solution_NDL_idxs[solution_idx] = [level_idx for level_idx in np.arange(len(levels.levels)) 
+                                                    if any([solution == level_solution for level_solution in levels.levels[level_idx]])][0]
         
     max_level = np.max(domain_solution_NDL_idxs)
     worst_NDL_section = [domain_solutions[most_crowded_domain][sol_idx] for sol_idx in np.arange(len(domain_solutions[most_crowded_domain])) 
@@ -137,6 +129,7 @@ class moeadd_optimizer(object):
                 temp_solution = pop_constructor.create(**solution_params)
                 if not np.any([temp_solution == solution for solution in population]):
                     population.append(temp_solution)
+                    print('New solution accepted')
                     break
         self.pareto_levels = pareto_levels(population, sorting_method=NDS_method, update_method=NDL_update)
         
@@ -145,7 +138,7 @@ class moeadd_optimizer(object):
         for weights_idx in range(weights_num):
             while True:
                 temp_weights = self.weights_generation(weights_size, delta)
-                if not temp_weights in self.weights:
+                if temp_weights not in self.weights:
                     self.weights.append(temp_weights)
                     break
         self.weights = np.array(self.weights)
@@ -242,9 +235,9 @@ class moeadd_optimizer(object):
                     most_crowded_domain = crowded_domains[np.argmax(PBIS)]
                     
                 if len(last_level_by_domains[most_crowded_domain]) == 1:
-                    worst_solution = locate_pareto_worst(self.pareto_levels.levels, self.weights, self.best_obj, PBI_penalty)                            
+                    worst_solution = locate_pareto_worst(self.pareto_levels, self.weights, self.best_obj, PBI_penalty)
                 else:
-                    PBIS = np.fromiter(map(lambda solution: penalty_based_intersection(solution, self.weights, self.best_obj, PBI_penalty), 
+                    PBIS = np.fromiter(map(lambda solution: penalty_based_intersection(solution, self.weights[most_crowded_domain], self.best_obj, PBI_penalty),
                                                last_level_by_domains[most_crowded_domain]), dtype = float)
                     worst_solution = last_level_by_domains[most_crowded_domain][np.argmax(PBIS)]                    
         
@@ -257,17 +250,11 @@ class moeadd_optimizer(object):
             for weight_idx in np.arange(len(self.weights)):
                 parent_idxs = self.mating_selection(weight_idx, self.weights, self.neighborhood_lists, self.pareto_levels.population,
                                                neighborhood_selector, neighborhood_selector_params, delta)
-                offsprings = self.evolutionary_operator.crossover([self.pareto_levels.population[idx] for idx in parent_idxs]) # В объекте эволюционного оператора выделять кроссовер
-                try:                
-                    for offspring_idx, offspring in enumerate(offsprings):
-                        while True:
-                            temp_offspring = self.evolutionary_operator.mutation(offspring)
-                            if not np.any([temp_offspring == solution for solution in self.pareto_levels.population]):
-                                break
-                        self.update_population(temp_offspring, PBI_penalty)
-                except TypeError:
+                offsprings = self.evolutionary_operator.crossover([self.pareto_levels.population[int(idx)] for idx in parent_idxs]) # В объекте эволюционного оператора выделять кроссовер
+                # try:
+                for offspring_idx, offspring in enumerate(offsprings):
                     while True:
-                        temp_offspring = self.evolutionary_operator.mutation(offsprings)
+                        temp_offspring = self.evolutionary_operator.mutation(offspring)
                         if not np.any([temp_offspring == solution for solution in self.pareto_levels.population]):
                             break
                     self.update_population(temp_offspring, PBI_penalty)
@@ -380,17 +367,17 @@ class moeadd_optimizer_constrained(moeadd_optimizer):
                                         p_metaidx in np.arange(int(len(parent_idxs)/2.))]
                 
                 offsprings = self.evolutionary_operator.crossover(parents_selected) # В объекте эволюционного оператора выделять кроссовер
-                try:                
+                if type(offsprings) == list or type(offsprings) == tuple:
                     for offspring_idx, offspring in enumerate(offsprings):
                         while True:
                             temp_offspring = self.evolutionary_operator.mutation(offspring)
                             if not np.any([temp_offspring == solution for solution in self.pareto_levels.population]):
                                 break
                         self.update_population(temp_offspring, PBI_penalty)
-                except TypeError:
+                else:
                     while True:
                         temp_offspring = self.evolutionary_operator.mutation(offsprings)
-                        if not np.any([temp_offspring == solution for solution in self.pareto_levels.population]):
+                        if not any([temp_offspring == solution for solution in self.pareto_levels.population]):
                             break
                     self.update_population(temp_offspring, PBI_penalty)
             if len(self.pareto_levels.levels) == 1:

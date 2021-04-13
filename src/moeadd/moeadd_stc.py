@@ -187,7 +187,7 @@ def simple_selector(sorted_neighbors, number_of_neighbors = 4):
     return sorted_neighbors[:number_of_neighbors]
 
 
-def plot_pareto(levels, weights = None):
+def plot_pareto(levels, weights = None, max_level = None):
     '''
     
     Vizualization method to demonstrate the pareto levels of 2D-problem on the plane via matplotlib
@@ -202,15 +202,27 @@ def plot_pareto(levels, weights = None):
         contains weights from the moeadd algorithm to be visualized
     
     '''
-    coords = [[(solution.obj_fun[0], solution.obj_fun[1]) for solution in levels.levels[front_idx]] for front_idx in np.arange(len(levels.levels))]
+    if max_level is None:
+        max_level = np.inf
+    else:
+        max_level += 1
+    print([front_idx for front_idx in np.arange(min((len(levels.levels), max_level)))])
+    coords = [[(solution.obj_fun[0], solution.obj_fun[1]) for solution in levels.levels[front_idx]] for front_idx in np.arange(min((len(levels.levels), max_level)))]
     coords_arrays = []
     for coord_set in coords:
         coords_arrays.append(np.array(coord_set))
     coords_arrays
-    colors = ['r', 'k', 'b', 'y', 'g'] + ['m' for idx in np.arange(len(coords_arrays) - 5)]
+    colors = ['r', 'r', 'b', 'y', 'g'] + ['m' for idx in np.arange(len(coords_arrays) - 5)]
     fig, ax = plt.subplots()
     for front_idx in np.arange(len(coords_arrays)):
-        ax.scatter(coords_arrays[front_idx][:, 0], coords_arrays[front_idx][:, 1], color = colors[front_idx])
+        ax.plot([1.04862679e-18, 1.29891486e-14, 1.30104261e-11, 0.00401406], [6, 2, 1, 0], color = 'r', linewidth = 1)
+        ax.scatter(coords_arrays[front_idx][:, 0], coords_arrays[front_idx][:, 1], color = colors[front_idx], s = 5)
+        plt.xlabel('Quality')
+        plt.ylabel('Complexity')
+#        ax.set_yscale('log')
+        ax.set_xscale('log')
+        plt.xlim((1e-19, 0.006))
+        plt.grid()
     if not (weights is None):
         for weight_idx in np.arange(weights.shape[0]):
             vector_coors = weights[weight_idx, :]
